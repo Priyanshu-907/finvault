@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background: #c0392b; padding: 32px; text-align: center; }
+        .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+        .header p { color: #f5c6c2; margin: 8px 0 0; }
+        .body { padding: 32px; }
+        .amount-box { background: #fdf3f2; border: 1px solid #f5c6c2; border-radius: 8px; padding: 20px; text-align: center; margin: 24px 0; }
+        .amount-box .amount { font-size: 36px; font-weight: bold; color: #c0392b; }
+        .reason-box { background: #fff8e1; border-left: 4px solid #f0ad4e; padding: 12px 16px; border-radius: 4px; margin: 16px 0; color: #7a5c00; }
+        .details { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .details td { padding: 10px 0; border-bottom: 1px solid #f0f0f0; color: #444; }
+        .details td:first-child { color: #888; width: 40%; }
+        .footer { background: #f9f9f9; padding: 20px 32px; text-align: center; color: #aaa; font-size: 12px; }
+        .ref { font-family: monospace; background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>❌ Transfer Failed</h1>
+        <p>Your transfer could not be completed</p>
+    </div>
+    <div class="body">
+        <p>Unfortunately, your transfer could not be processed. No funds have been debited from your account.</p>
+
+        <div class="amount-box">
+            <div class="amount" th:text="${currency + ' ' + #numbers.formatDecimal(amount, 1, 2)}">INR 1,000.00</div>
+        </div>
+
+        <div class="reason-box">
+            <strong>Reason:</strong> <span th:text="${failureReason}">Insufficient funds</span>
+        </div>
+
+        <table class="details">
+            <tr>
+                <td>From Account</td>
+                <td th:text="${fromAccount}">FV10****0001</td>
+            </tr>
+            <tr>
+                <td>To Account</td>
+                <td th:text="${toAccount}">FV10****0002</td>
+            </tr>
+            <tr>
+                <td>Date &amp; Time</td>
+                <td th:text="${#temporals.format(occurredAt, 'dd MMM yyyy, HH:mm')}">01 Jan 2025, 10:30</td>
+            </tr>
+            <tr>
+                <td>Reference</td>
+                <td><span class="ref" th:text="${referenceId}">TXN-XXXX</span></td>
+            </tr>
+        </table>
+
+        <p style="color:#888;font-size:13px;">Please check your account balance and try again. If you need help, contact <a href="mailto:support@finvault.com">support@finvault.com</a>.</p>
+    </div>
+    <div class="footer">
+        &copy; 2025 FinVault Banking. This is an automated notification — please do not reply.
+    </div>
+</div>
+</body>
+</html>

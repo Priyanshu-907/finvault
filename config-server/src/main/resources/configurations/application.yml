@@ -1,0 +1,27 @@
+# application.yml — shared config fetched by ALL services on startup
+# Access at: http://localhost:8888/application/default
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  access-token-expiry: 900000
+  refresh-token-expiry: 604800000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,refresh
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.finvault: DEBUG

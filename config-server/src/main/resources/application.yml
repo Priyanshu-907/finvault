@@ -1,0 +1,31 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+
+  profiles:
+    active: native   # Use local classpath files instead of Git repo
+
+  cloud:
+    config:
+      server:
+        native:
+          # Config files live in src/main/resources/configurations/
+          search-locations: classpath:/configurations
+        encrypt:
+          enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,env,refresh
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.config: DEBUG
