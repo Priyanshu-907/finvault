@@ -1,0 +1,204 @@
+version: '3.8'
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────
+
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: finvault-postgres-auth
+    environment:
+      POSTGRES_DB: finvault_auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-accounts:
+    image: postgres:16-alpine
+    container_name: finvault-postgres-accounts
+    environment:
+      POSTGRES_DB: finvault_accounts
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-accounts-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-transactions:
+    image: postgres:16-alpine
+    container_name: finvault-postgres-txn
+    environment:
+      POSTGRES_DB: finvault_transactions
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-txn-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: finvault-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: finvault-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: finvault-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: finvault-zipkin
+    ports:
+      - "9411:9411"
+
+  # ── Spring Cloud ─────────────────────────────────────────────
+
+  config-server:
+    build: ./config-server
+    container_name: finvault-config
+    ports:
+      - "8888:8888"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8888/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  discovery-server:
+    build: ./discovery-server
+    container_name: finvault-eureka
+    ports:
+      - "8761:8761"
+    depends_on:
+      config-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Microservices ─────────────────────────────────────────────
+
+  auth-service:
+    build: ./auth-service
+    container_name: finvault-auth
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres-auth
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      EUREKA_HOST: discovery-server
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+
+  account-service:
+    build: ./account-service
+    container_name: finvault-accounts
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: postgres-accounts
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      EUREKA_HOST: discovery-server
+    depends_on:
+      postgres-accounts:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+
+  transaction-service:
+    build: ./transaction-service
+    container_name: finvault-transactions
+    ports:
+      - "8084:8084"
+    environment:
+      DB_HOST: postgres-transactions
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      KAFKA_HOST: kafka:29092
+      EUREKA_HOST: discovery-server
+    depends_on:
+      postgres-transactions:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      discovery-server:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: finvault-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_HOST: discovery-server
+      REDIS_HOST: redis
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-auth-data:
+  postgres-accounts-data:
+  postgres-txn-data:
+  redis-data:
