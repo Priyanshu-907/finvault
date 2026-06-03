@@ -1,0 +1,25 @@
+spring:
+  cloud:
+    gateway:
+      routes: []   # No routes needed for unit tests
+
+  data:
+    redis:
+      host: localhost
+      port: 6370   # Won't connect — tests only exercise JwtService directly
+
+eureka:
+  client:
+    enabled: false
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+
+gateway:
+  public-paths:
+    - /api/v1/auth/register
+    - /api/v1/auth/login
+    - /api/v1/auth/refresh
+    - /actuator/health
+    - /docs/**
+    - /fallback/**

@@ -1,0 +1,145 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+
+  cloud:
+    gateway:
+      # Global CORS config
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+            allowedHeaders: "*"
+            exposedHeaders: Authorization
+
+      # Default filters applied to ALL routes
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 20       # tokens added per second
+            redis-rate-limiter.burstCapacity: 40       # max burst
+            redis-rate-limiter.requestedTokens: 1
+            key-resolver: "#{@ipKeyResolver}"
+
+      routes:
+
+        # ── Auth Service ────────────────────────────────────────
+        # Public endpoints — no JWT required
+        - id: auth-service-public
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: auth-cb
+                fallbackUri: forward:/fallback/auth
+
+        # ── Account Service ─────────────────────────────────────
+        - id: account-service
+          uri: lb://account-service
+          predicates:
+            - Path=/api/v1/accounts/**
+          filters:
+            - JwtAuthenticationFilter
+            - name: CircuitBreaker
+              args:
+                name: account-cb
+                fallbackUri: forward:/fallback/service
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+                methods: GET
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 500ms
+
+        # ── Transaction Service ──────────────────────────────────
+        - id: transaction-service
+          uri: lb://transaction-service
+          predicates:
+            - Path=/api/v1/transactions/**
+          filters:
+            - JwtAuthenticationFilter
+            - name: CircuitBreaker
+              args:
+                name: transaction-cb
+                fallbackUri: forward:/fallback/service
+            - name: Retry
+              args:
+                retries: 2
+                statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+                methods: GET
+                backoff:
+                  firstBackoff: 100ms
+                  maxBackoff: 1000ms
+
+        # ── Swagger UI aggregation routes ───────────────────────
+        - id: auth-swagger
+          uri: lb://auth-service
+          predicates:
+            - Path=/docs/auth/**
+          filters:
+            - RewritePath=/docs/auth/(?<segment>.*), /$\{segment}
+
+        - id: account-swagger
+          uri: lb://account-service
+          predicates:
+            - Path=/docs/accounts/**
+          filters:
+            - RewritePath=/docs/accounts/(?<segment>.*), /$\{segment}
+
+        - id: transaction-swagger
+          uri: lb://transaction-service
+          predicates:
+            - Path=/docs/transactions/**
+          filters:
+            - RewritePath=/docs/transactions/(?<segment>.*), /$\{segment}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_HOST:localhost}:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+# Public paths that bypass JWT filter
+gateway:
+  public-paths:
+    - /api/v1/auth/register
+    - /api/v1/auth/login
+    - /api/v1/auth/refresh
+    - /actuator/health
+    - /docs/**
+    - /fallback/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+
+logging:
+  level:
+    com.finvault: DEBUG
+    org.springframework.cloud.gateway: INFO
